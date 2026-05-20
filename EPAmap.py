@@ -1,12 +1,14 @@
 import requests
 import pandas as pd 
 import matplotlib.pyplot as plt # plotting map
+import geopandas as gpd
+from shapely.geometry import Point
 
 print("script started")
 
 #API key
 EMAIL = "naina.ghiware@gmail.com"
-API_KEY = "API KEY HERE"
+API_KEY = "indigowolf76"
 
 url = (
     f"https://aqs.epa.gov/data/api/monitors/byState?"
@@ -91,3 +93,55 @@ plt.savefig("california_aqs_monitor_map.png", dpi=300)
 plt.show()
 
 print("saved california_aqs_monitor_map.png")
+
+
+#spatial join of EPA points with MSA polygons
+
+epa_gdf = gpd.GeoDataFrame(
+    df_map,
+    geometry = gpd.points_from_xy(df_map["longitude"], df_map["latitude"]),
+    crs = "EPSG:4326"
+)
+msa = gpd.read_file("cbsa_2024.gdb")
+msa = msa.to_crs(epa_gdf.crs)
+
+epa_with_msa = gpd.sjoin(
+    epa_gdf,
+    msa,
+    how="left",
+    predicate="intersects"
+)
+epa_with_msa.drop(columns="geometry").to_csv(
+    "california_aqs_monitors_with_msa.csv",
+    index=False
+)
+epa_with_msa.to_file(
+    "california_aqs_monitors_with_msa.geojson",
+    driver="GeoJSON"
+)
+print("saved california_aqs_monitors_with_msa.csv")
+print("saved california_aqs_monitors_with_msa.geojson")
+
+#spatial join of EPA points with ejscreen polygons
+ej = gpd.read_file("2024/2.32_August_UseMe/EJSCREEN_2024_tract.gdb")
+ej = ej.to_crs(epa_gdf.crs)
+
+epa_with_ej = gpd.sjoin(
+    epa_gdf,
+    ej,
+    how="left",
+    predicate="intersects"
+)
+
+epa_with_ej.drop(columns="geometry").to_csv(
+    "california_aqs_monitors_with_ejscreen.csv",
+    index=False
+)
+
+epa_with_ej.to_file(
+    "california_aqs_monitors_with_ejscreen.geojson",
+    driver="GeoJSON"
+)
+
+print("saved california_aqs_monitors_with_ejscreen.csv")
+print("saved california_aqs_monitors_with_ejscreen.geojson")
