@@ -94,54 +94,65 @@ plt.show()
 
 print("saved california_aqs_monitor_map.png")
 
+import matplotlib.cm as cm
+import numpy as np
 
-#spatial join of EPA points with MSA polygons
-
-epa_gdf = gpd.GeoDataFrame(
-    df_map,
-    geometry = gpd.points_from_xy(df_map["longitude"], df_map["latitude"]),
-    crs = "EPSG:4326"
-)
 msa = gpd.read_file("cbsa_2024.gdb")
-msa = msa.to_crs(epa_gdf.crs)
+msa = msa.to_crs("EPSG:4326")
 
-epa_with_msa = gpd.sjoin(
-    epa_gdf,
-    msa,
-    how="left",
-    predicate="intersects"
-)
-epa_with_msa.drop(columns="geometry").to_csv(
-    "california_aqs_monitors_with_msa.csv",
-    index=False
-)
-epa_with_msa.to_file(
-    "california_aqs_monitors_with_msa.geojson",
-    driver="GeoJSON"
-)
-print("saved california_aqs_monitors_with_msa.csv")
-print("saved california_aqs_monitors_with_msa.geojson")
+# only true msa 
+msa = msa[msa["LSAD"] == "M1"].copy()
 
-#spatial join of EPA points with ejscreen polygons
-ej = gpd.read_file("2024/2.32_August_UseMe/EJSCREEN_2024_tract.gdb")
-ej = ej.to_crs(epa_gdf.crs)
+#combin counties into MSAs 
+msa_dissolved = msa.dissolve(by="CBSAFP").reset_index()
 
-epa_with_ej = gpd.sjoin(
-    epa_gdf,
-    ej,
-    how="left",
-    predicate="intersects"
-)
+#only california
+ca_bbox_url = "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
+ca_geojson2 = requests.get(ca_bbox_url).json()
+ca_feature2 = next(f for f in ca_geojson2["features"] if f["properties"]["name"] == "California")
+gdf_ca = gpd.GeoDataFrame.from_features([ca_feature2], crs="EPSG:4326")
 
-epa_with_ej.drop(columns="geometry").to_csv(
-    "california_aqs_monitors_with_ejscreen.csv",
-    index=False
-)
+msa_ca = msa_dissolved[msa_dissolved.intersects(gdf_ca.union_all())].copy()
+msa_ca = msa_ca.reset_index(drop=True)
 
-epa_with_ej.to_file(
-    "california_aqs_monitors_with_ejscreen.geojson",
-    driver="GeoJSON"
-)
+# dif msa color
+n = len(msa_ca)
+colors = cm.get_cmap("tab20", n)(np.linspace(0, 1, n))
 
-print("saved california_aqs_monitors_with_ejscreen.csv")
-print("saved california_aqs_monitors_with_ejscreen.geojson")
+fig, ax = plt.subplots(figsize=(10, 12))
+gdf_ca.plot(ax=ax, facecolor="#f5f5f0", edgecolor="black", linewidth=1.2, zorder=1)
+for i, (_, row) in enumerate(msa_ca.iterrows()):
+    gpd.GeoDataFrame([row], geometry="geometry", crs="EPSG:4326").plot(
+        ax=ax,
+        facecolor=(*colors[i][:3], 0.45),   # color with alpha
+        edgecolor="black",
+        linewidth=0.8,
+        zorder=2
+    )
+#labelling
+for _, row in msa_ca.iterrows():
+    centroid = row.geometry.centroid
+    if -125 <= centroid.x <= -113.5 and 32 <= centroid.y <= 42.5:
+        short_name = row["NAME"].split(",")[0].strip()
+        ax.text(
+            centroid.x, centroid.y,
+            short_name,
+            fontsize=6.5,
+            ha="center", va="center",
+            fontweight="bold",
+            color="black",
+            zorder=4,
+            bbox=dict(facecolor="white", alpha=0.55, edgecolor="none", pad=1.2)
+        )
+
+ax.set_title("California Metropolitan Statistical Areas (MSAs)", fontsize=14, fontweight="bold")
+ax.set_xlabel("Longitude")
+ax.set_ylabel("Latitude")
+ax.set_xlim(-125, -113.5)
+ax.set_ylim(32, 42.5)
+ax.set_aspect("equal")
+plt.tight_layout()
+plt.savefig("california_msa_colored_labeled.png", dpi=300)
+plt.show()
+
+print("saved california_msa_colored_labeled.png")
