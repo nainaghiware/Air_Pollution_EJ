@@ -12,7 +12,7 @@ import numpy as np
 
 #API key
 EMAIL = "naina.ghiware@gmail.com"
-API_KEY = "indigowolf76"
+#API_KEY = "YOUR API KEY HERE"
 
 url = (
     f"https://aqs.epa.gov/data/api/monitors/byState?"
